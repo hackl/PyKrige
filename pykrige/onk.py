@@ -3,7 +3,7 @@
 # =============================================================================
 # File      : onk.py 
 # Creation  : 22 Mar 2018
-# Time-stamp: <Don 2018-03-22 19:50 juergen>
+# Time-stamp: <Fre 2018-03-23 16:37 juergen>
 #
 # Copyright (c) 2018 Jürgen Hackl <hackl@ibi.baug.ethz.ch>
 #               http://www.ibi.ethz.ch
@@ -36,6 +36,8 @@ from . import core, config
 from .core import _adjust_for_anisotropy, _initialize_variogram_model, \
     _make_variogram_parameter_list, _find_statistics
 import warnings
+import networkx as nx
+
 
 def str_to_bool(s):
     if s == 'True':
@@ -170,10 +172,10 @@ class OrdinaryKriging:
                       'hole-effect': variogram_models.hole_effect_variogram_model}
 
     def __init__(self, x, y, z, variogram_model='linear',
-                 variogram_parameters=None, variogram_function=None, nlags=6,
+                 variogram_parameters=None, variogram_function=None, nlags=16,
                  weight=False, anisotropy_scaling=1.0, anisotropy_angle=0.0,
                  verbose=None, enable_plotting=None, enable_statistics=True,
-                 coordinates_type='euclidean'):
+                 coordinates_type='euclidean',network=None):
 
         # Code assumes 1D input arrays of floats. Ensures that any extraneous
         # dimensions don't get in the way. Copies are created to avoid any
@@ -186,6 +188,8 @@ class OrdinaryKriging:
             np.atleast_1d(np.squeeze(np.array(y, copy=True, dtype=np.float64)))
         self.Z = \
             np.atleast_1d(np.squeeze(np.array(z, copy=True, dtype=np.float64)))
+
+        self.network = network
 
         if verbose is None:
             self.verbose = str_to_bool(config.log.verbose)
@@ -229,6 +233,10 @@ class OrdinaryKriging:
             self.X_ADJUSTED = self.X_ORIG
             self.Y_ADJUSTED = self.Y_ORIG
         elif coordinates_type == 'network':
+            if self.network is None:
+                log.error("No 'network' is defined.")
+                raise ValueError
+            # TODO: add test if network is a network
             if anisotropy_scaling != 1.0:
                 log.warn("Anisotropy is not compatible with network "
                          "coordinates. Ignoring user set anisotropy.")
@@ -238,7 +246,6 @@ class OrdinaryKriging:
             self.anisotropy_angle = 0.0
             self.X_ADJUSTED = self.X_ORIG
             self.Y_ADJUSTED = self.Y_ORIG
-
         else:
             log.error("Only 'euclidean', 'geographic' and 'network' are valid "
                       +"values for coordinates-keyword.")
@@ -272,7 +279,8 @@ class OrdinaryKriging:
                                                    self.Y_ADJUSTED)).T,
                                         self.Z, self.variogram_model, vp_temp,
                                         self.variogram_function, nlags,
-                                        weight, self.coordinates_type)
+                                        weight, self.coordinates_type,
+                                        self.network)
 
         if self.verbose:
             log.info("Coordinates type: '{}'".format(self.coordinates_type))
@@ -315,7 +323,7 @@ class OrdinaryKriging:
                                             self.Y_ADJUSTED)).T,
                                  self.Z, self.variogram_function,
                                  self.variogram_model_parameters,
-                                 self.coordinates_type)
+                                 self.coordinates_type,self.network)
             self.Q1 = core.calcQ1(self.epsilon)
             self.Q2 = core.calcQ2(self.epsilon)
             self.cR = core.calc_cR(self.Q2, self.sigma)

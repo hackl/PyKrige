@@ -26,11 +26,19 @@ References
 Copyright (c) 2015-2018, PyKrige Developers
 """
 
+import logging
+#import pykrige
+#from . import config
+import networkx as nx
 import numpy as np
 from scipy.spatial.distance import pdist, squareform, cdist
 from scipy.optimize import least_squares
+#from . import config
+
+log = logging.getLogger(__name__)
 
 eps = 1.e-10   # Cutoff for comparison to zero
+#eps = float(config.kriging.cutoff)   # Cutoff for comparison to zero
 
 
 def great_circle_distance(lon1, lat1, lon2, lat2):
@@ -158,8 +166,8 @@ def _adjust_for_anisotropy(X, center, scaling, angle):
                              [0., 0., 1.]])
         rot_tot = np.dot(rotate_z, np.dot(rotate_y, rotate_x))
     else:
-        raise ValueError("Adjust for anisotropy function doesn't "
-                         "support ND spaces where N>3")
+        log.error("Adjust for anisotropy function doesn't support ND spaces where N>3")
+        raise ValueError
     X_adj = np.dot(stretch, np.dot(rot_tot, X.T)).T
 
     X_adj += center
@@ -340,10 +348,40 @@ def _make_variogram_parameter_list(variogram_model, variogram_model_parameters):
 
     return parameter_list
 
+def ndist(V,network,weight=None,algorithm='single'):
+    dist = []
+    if algorithm is 'all':
+        paths = dict(nx.all_pairs_dijkstra_path_length(network,weight=weight))
+    for i in range(0,len(V)-1):
+        for j in range(i+1,len(V)):
+            if algorithm is 'single':
+                dist.append(nx.shortest_path_length(network, source=V[i],
+    target=V[j],weight=weight))
+            elif algorithm is 'all':
+                dist.append(paths[V[i]][V[j]])
+    return(np.array(dist))
+
+def ndist2(V,u,network,weight=None):
+    dist = []
+    for v in V:
+        dist.append(nx.shortest_path_length(network, source=v, target=u,weight=weight))
+    return(np.array(dist))
+
+
+
+def get_nodes(X,network):
+    node_dict = {}
+    for n,a in network.nodes(data=True):
+        node_dict[(a['x'],a['y'])] = n
+    if len(X.shape) > 1:
+        V = [node_dict[(X[i][0],X[i][1])] for i in range(len(X))]
+    else:
+        V = node_dict[(X[0],X[1])]
+    return(V)
 
 def _initialize_variogram_model(X, y, variogram_model,
                                 variogram_model_parameters, variogram_function,
-                                nlags, weight, coordinates_type):
+                                nlags, weight, coordinates_type,network=None):
     """Initializes the variogram model for kriging. If user does not specify
     parameters, calls automatic variogram estimation routine.
     Returns lags, semivariance, and variogram model parameters.
@@ -397,8 +435,8 @@ def _initialize_variogram_model(X, y, variogram_model,
     # could be improved in the future
     elif coordinates_type == 'geographic':
         if X.shape[1] != 2:
-            raise ValueError('Geographic coordinate type only '
-                             'supported for 2D datasets.')
+            log.error("Geographic coordinate type only supported for 2D datasets.")
+            raise ValueError
         x1, x2 = np.meshgrid(X[:, 0], X[:, 0], sparse=True)
         y1, y2 = np.meshgrid(X[:, 1], X[:, 1], sparse=True)
         z1, z2 = np.meshgrid(y, y, sparse=True)
@@ -408,6 +446,13 @@ def _initialize_variogram_model(X, y, variogram_model,
         d = d[(indices[0, :, :] > indices[1, :, :])]
         g = g[(indices[0, :, :] > indices[1, :, :])]
 
+    elif coordinates_type == 'network':
+        if network is None:
+            log.error("No 'network' is defined.")
+            raise ValueError
+        V = get_nodes(X,network)
+        d = ndist(V,network,weight='length',algorithm='single')
+        g = 0.5 * pdist(y[:, None], metric='sqeuclidean')
     else:
         raise ValueError("Specified coordinate type '%s' "
                          "is not supported." % coordinates_type)
@@ -583,7 +628,7 @@ def _calculate_variogram_model(lags, semivariance, variogram_model,
 
 
 def _krige(X, y, coords, variogram_function,
-           variogram_model_parameters, coordinates_type):
+           variogram_model_parameters, coordinates_type, network=None):
     """Sets up and solves the ordinary kriging system for the given
     coordinate pair. This function is only used for the statistics calculations.
 
@@ -632,6 +677,16 @@ def _krige(X, y, coords, variogram_function,
                                    coords[0] * np.ones(X.shape[0]),
                                    coords[1] * np.ones(X.shape[0]))
 
+    elif coordinates_type == 'network':
+        if network is None:
+            log.error("No 'network' is defined.")
+            raise ValueError
+        V = get_nodes(X,network)
+        d = squareform(ndist(V,network,weight='length',algorithm='single'))
+        u = get_nodes(coords,network)
+        bd = ndist2(V,u,network,weight='length')
+
+
     # this check is done when initializing variogram, but kept here anyways...
     else:
         raise ValueError("Specified coordinate type '%s' "
@@ -667,7 +722,7 @@ def _krige(X, y, coords, variogram_function,
 
 
 def _find_statistics(X, y, variogram_function,
-                     variogram_model_parameters, coordinates_type):
+                     variogram_model_parameters, coordinates_type, network=None):
     """Calculates variogram fit statistics.
     Returns the delta, sigma, and epsilon values for the variogram fit.
     These arrays are used for statistics calculations.
@@ -707,7 +762,7 @@ def _find_statistics(X, y, variogram_function,
 
         else:
             k, ss = _krige(X[:i, :], y[:i], X[i, :], variogram_function,
-                           variogram_model_parameters, coordinates_type)
+                           variogram_model_parameters, coordinates_type, network)
 
             # if the estimation error is zero, it's probably because
             # the evaluation point X[i, :] is really close to one of the
@@ -717,7 +772,7 @@ def _find_statistics(X, y, variogram_function,
                 continue
 
             delta[i] = y[i] - k
-            sigma[i] = np.sqrt(ss)
+            sigma[i] = np.sqrt(np.absolute(ss))
 
     # only use non-zero entries in these arrays... sigma is used to pull out
     # non-zero entries in both cases because it is guaranteed to be positive,
