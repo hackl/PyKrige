@@ -10,3 +10,8 @@ dist/*
 
 examples/meuse_example_data/*
 *.ipynb_checkpoints/*
+data/
+results/
+temp/
+logs/
+output/

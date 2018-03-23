@@ -1,5 +1,5 @@
 __author__ = 'Benjamin S. Murphy'
-__version__ = '1.4.dev0'
+__version__ = '1.4.dev1'
 __doc__ = """
 PyKrige
 =======
@@ -43,6 +43,12 @@ References
 Copyright (c) 2015-2018, PyKrige Developers
 """
 
+import os
+import sys
+import collections
+import configparser
+import logging
+
 from . import kriging_tools as kt
 from .ok import OrdinaryKriging
 from .uk import UniversalKriging
@@ -50,3 +56,72 @@ from .ok3d import OrdinaryKriging3D
 from .uk3d import UniversalKriging3D
 
 __all__ = ['ok', 'uk', 'ok3d', 'uk3d', 'kriging_tools']
+
+class DotDict(collections.OrderedDict):
+    """
+    A string-valued dictionary that can be accessed with the "." notation
+    """
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(key)
+
+config = DotDict() # global configuration
+
+d = os.path.dirname
+base = os.path.join(d(d(__file__)),'pykrige', 'pykrige.cfg')
+
+config.paths = [base,'pykrige.cfg']
+
+def read(*paths, **validators):
+    """
+    Load the configuration, make each section available in a separate dict.
+
+    The configuration location is where the script is executed:
+       - pykrige.cfg
+
+    If this file is missing, the fallback is the source code:
+       - pykrige/pykrige.cfg
+
+    Please note: settings in the site configuration file are overridden
+    by settings with the same key names in the pykrige.cfg.
+    """
+    paths = config.paths + list(paths)
+    parser = configparser.SafeConfigParser()
+    found = parser.read(os.path.normpath(os.path.expanduser(p)) for p in paths)
+    if not found:
+        raise IOError('No configuration file found in %s' % str(paths))
+    config.found = found
+    config.clear()
+    for section in parser.sections():
+        config[section] = sec = DotDict(parser.items(section))
+        for k, v in sec.items():
+            sec[k] = validators.get(k, lambda x: x)(v)
+
+config.read = read
+
+config.read()
+
+# set up logging to file - see previous section for more details
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)12s:%(lineno)4d - %(levelname)8s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    filename=config.log.logfile,
+                    filemode='w')
+
+if config.log.verbose == 'True':
+    # define a Handler which writes INFO messages or higher to the sys.stderr
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+
+    # set a format which is simpler for console use
+    formatter = logging.Formatter('[%(asctime)s: %(levelname)-5s] %(message)s',
+                              datefmt='%m-%d %H:%M:%S')
+
+    # tell the handler to use this format
+    console.setFormatter(formatter)
+
+    # add the handler to the root logger
+    logging.getLogger('').addHandler(console)
+
