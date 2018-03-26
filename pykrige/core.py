@@ -29,7 +29,7 @@ Copyright (c) 2015-2018, PyKrige Developers
 import logging
 #import pykrige
 #from . import config
-import networkx as nx
+#from .network_tools import ndist
 import numpy as np
 from scipy.spatial.distance import pdist, squareform, cdist
 from scipy.optimize import least_squares
@@ -348,18 +348,18 @@ def _make_variogram_parameter_list(variogram_model, variogram_model_parameters):
 
     return parameter_list
 
-def ndist(V,network,weight=None,algorithm='single'):
-    dist = []
-    if algorithm is 'all':
-        paths = dict(nx.all_pairs_dijkstra_path_length(network,weight=weight))
-    for i in range(0,len(V)-1):
-        for j in range(i+1,len(V)):
-            if algorithm is 'single':
-                dist.append(nx.shortest_path_length(network, source=V[i],
-    target=V[j],weight=weight))
-            elif algorithm is 'all':
-                dist.append(paths[V[i]][V[j]])
-    return(np.array(dist))
+# def ndist(V,network,weight=None,algorithm='single'):
+#     dist = []
+#     if algorithm is 'all':
+#         paths = dict(nx.all_pairs_dijkstra_path_length(network,weight=weight))
+#     for i in range(0,len(V)-1):
+#         for j in range(i+1,len(V)):
+#             if algorithm is 'single':
+#                 dist.append(nx.shortest_path_length(network, source=V[i],
+#     target=V[j],weight=weight))
+#             elif algorithm is 'all':
+#                 dist.append(paths[V[i]][V[j]])
+#     return(np.array(dist))
 
 def ndist2(V,u,network,weight=None):
     dist = []
@@ -369,15 +369,15 @@ def ndist2(V,u,network,weight=None):
 
 
 
-def get_nodes(X,network):
-    node_dict = {}
-    for n,a in network.nodes(data=True):
-        node_dict[(a['x'],a['y'])] = n
-    if len(X.shape) > 1:
-        V = [node_dict[(X[i][0],X[i][1])] for i in range(len(X))]
-    else:
-        V = node_dict[(X[0],X[1])]
-    return(V)
+# def get_nodes(X,network):
+#     node_dict = {}
+#     for n,a in network.nodes(data=True):
+#         node_dict[(a['x'],a['y'])] = n
+#     if len(X.shape) > 1:
+#         V = [node_dict[(X[i][0],X[i][1])] for i in range(len(X))]
+#     else:
+#         V = node_dict[(X[0],X[1])]
+#     return(V)
 
 def _initialize_variogram_model(X, y, variogram_model,
                                 variogram_model_parameters, variogram_function,
@@ -450,8 +450,7 @@ def _initialize_variogram_model(X, y, variogram_model,
         if network is None:
             log.error("No 'network' is defined.")
             raise ValueError
-        V = get_nodes(X,network)
-        d = ndist(V,network,weight='length',algorithm='single')
+        d = network.ndist(X,mode='pdist')
         g = 0.5 * pdist(y[:, None], metric='sqeuclidean')
     else:
         raise ValueError("Specified coordinate type '%s' "
@@ -681,10 +680,8 @@ def _krige(X, y, coords, variogram_function,
         if network is None:
             log.error("No 'network' is defined.")
             raise ValueError
-        V = get_nodes(X,network)
-        d = squareform(ndist(V,network,weight='length',algorithm='single'))
-        u = get_nodes(coords,network)
-        bd = ndist2(V,u,network,weight='length')
+        d = squareform(network.ndist(X,mode='pdist'))
+        bd = network.ndist(X,a=coords,mode='cdist')
 
 
     # this check is done when initializing variogram, but kept here anyways...

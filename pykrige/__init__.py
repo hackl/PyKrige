@@ -63,9 +63,43 @@ class DotDict(collections.OrderedDict):
     """
     def __getattr__(self, key):
         try:
-            return self[key]
+            if self[key] == 'True':
+                return True
+            elif self[key] == 'False':
+                return False
+            elif self.is_number(self[key]):
+                if self.is_int(self[key]):
+                    return int(self[key])
+                else:
+                    return float(self[key])
+            else:
+                return self[key]
         except KeyError:
             raise AttributeError(key)
+
+    def is_number(self, s):
+        try:
+            float(s)
+            return True
+        except TypeError:
+            return False
+        except ValueError:
+            return False
+
+    def is_int(self,x):
+        try:
+            a = float(x)
+            b = int(a)
+        except ValueError:
+            return False
+        else:
+            return a == b
+
+    # def __getattr__(self, key):
+    #     try:
+    #         return self[key]
+    #     except KeyError:
+    #         raise AttributeError(key)
 
 config = DotDict() # global configuration
 
@@ -104,16 +138,18 @@ config.read = read
 config.read()
 
 # set up logging to file - see previous section for more details
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)12s:%(lineno)4d - %(levelname)8s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    filename=config.log.logfile,
-                    filemode='w')
-
-if config.log.verbose == 'True':
+if config.logging.enabled:
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(name)12s:%(lineno)4d - %(levelname)8s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        filename=config.logging.logfile,
+                        filemode='w')
+else:
+    logging.basicConfig()
+if config.logging.verbose:
     # define a Handler which writes INFO messages or higher to the sys.stderr
     console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
+    console.setLevel(logging._nameToLevel[config.logging.level])
 
     # set a format which is simpler for console use
     formatter = logging.Formatter('[%(asctime)s: %(levelname)-5s] %(message)s',

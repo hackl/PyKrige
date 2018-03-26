@@ -3,7 +3,7 @@
 # =============================================================================
 # File      : onk.py 
 # Creation  : 22 Mar 2018
-# Time-stamp: <Fre 2018-03-23 16:37 juergen>
+# Time-stamp: <Mon 2018-03-26 16:55 juergen>
 #
 # Copyright (c) 2018 Jürgen Hackl <hackl@ibi.baug.ethz.ch>
 #               http://www.ibi.ethz.ch
@@ -163,7 +163,7 @@ class OrdinaryKriging:
         Hydrogeology, (Cambridge University Press, 1997) 272 p.
     """
 
-    eps = float(config.kriging.cutoff)   # Cutoff for comparison to zero
+    eps = config.kriging.cutoff   # Cutoff for comparison to zero
     variogram_dict = {'linear': variogram_models.linear_variogram_model,
                       'power': variogram_models.power_variogram_model,
                       'gaussian': variogram_models.gaussian_variogram_model,
@@ -172,9 +172,9 @@ class OrdinaryKriging:
                       'hole-effect': variogram_models.hole_effect_variogram_model}
 
     def __init__(self, x, y, z, variogram_model='linear',
-                 variogram_parameters=None, variogram_function=None, nlags=16,
+                 variogram_parameters=None, variogram_function=None, nlags=6,
                  weight=False, anisotropy_scaling=1.0, anisotropy_angle=0.0,
-                 verbose=None, enable_plotting=None, enable_statistics=True,
+                 verbose=None, enable_plotting=None, enable_statistics=None,
                  coordinates_type='euclidean',network=None):
 
         # Code assumes 1D input arrays of floats. Ensures that any extraneous
@@ -192,12 +192,12 @@ class OrdinaryKriging:
         self.network = network
 
         if verbose is None:
-            self.verbose = str_to_bool(config.log.verbose)
+            self.verbose = config.logging.verbose
         else:
             self.verbose = verbose
 
         if enable_plotting is None:
-            self.enable_plotting = str_to_bool(config.plotting.enabled)
+            self.enable_plotting = config.plotting.enabled
         else:
             self.enable_plotting = enable_plotting
 
@@ -254,9 +254,151 @@ class OrdinaryKriging:
         self.coordinates_type = coordinates_type
 
         # set up variogram model and parameters...
+        self.update_variogram_model(variogram_model)
+        # self.variogram_model = variogram_model
+        # if self.variogram_model not in self.variogram_dict.keys() and \
+        #                 self.variogram_model != 'custom':
+        #     log.error("Specified variogram model '{}' is not supported.".format(
+        #         variogram_model))
+        #     raise ValueError
+        # elif self.variogram_model == 'custom':
+        #     if variogram_function is None or not callable(variogram_function):
+        #         log.error("Must specify callable function for custom variogram model.")
+        #         raise ValueError
+        #     else:
+        #         self.variogram_function = variogram_function
+        # else:
+        #     self.variogram_function = self.variogram_dict[self.variogram_model]
+
+        # if self.verbose:
+        #     log.info("Initializing variogram model...")
+
+        # vp_temp = _make_variogram_parameter_list(self.variogram_model,
+        #                                          variogram_parameters)
+        # self.lags, self.semivariance, self.variogram_model_parameters = \
+        #     _initialize_variogram_model(np.vstack((self.X_ADJUSTED,
+        #                                            self.Y_ADJUSTED)).T,
+        #                                 self.Z, self.variogram_model, vp_temp,
+        #                                 self.variogram_function, nlags,
+        #                                 weight, self.coordinates_type,
+        #                                 self.network)
+
+        # if self.verbose:
+        #     log.info("Coordinates type: '{}'".format(self.coordinates_type))
+        #     if self.variogram_model == 'linear':
+        #         log.info("Using '{}' Variogram Model".format(
+        #             self.variogram_model))
+        #         log.info("Slope: {}".format(
+        #             self.variogram_model_parameters[0]))
+        #         log.info("Nugget: {}".format(
+        #             self.variogram_model_parameters[1]))
+        #     elif self.variogram_model == 'power':
+        #         log.info("Using '{}' Variogram Model".format(
+        #             self.variogram_model))
+        #         log.info("Scale: {}".format(
+        #             self.variogram_model_parameters[0]))
+        #         log.info("Exponent: {}".format(
+        #             self.variogram_model_parameters[1]))
+        #         log.info("Nugget: {}".format(
+        #             self.variogram_model_parameters[2]))
+        #     elif self.variogram_model == 'custom':
+        #         log.info("Using Custom Variogram Model")
+        #     else:
+        #         log.info("Using '{}' Variogram Model".format(
+        #             self.variogram_model))
+        #         log.info("Partial Sill:{}".format(
+        #             self.variogram_model_parameters[0]))
+        #         log.info("Full Sill: {}".format(
+        #             self.variogram_model_parameters[0]
+        #             + self.variogram_model_parameters[2]))
+        #         log.info("Range: {}".format(self.variogram_model_parameters[1]))
+        #         log.info("Nugget: {}".format(self.variogram_model_parameters[2]))
+        # if self.enable_plotting:
+        #     self.display_variogram_model()
+
+        # if self.verbose:
+        #     log.info("Calculating statistics on variogram model fit...")
+        # if enable_statistics:
+        #     self.delta, self.sigma, self.epsilon = \
+        #         _find_statistics(np.vstack((self.X_ADJUSTED,
+        #                                     self.Y_ADJUSTED)).T,
+        #                          self.Z, self.variogram_function,
+        #                          self.variogram_model_parameters,
+        #                          self.coordinates_type,self.network)
+        #     self.Q1 = core.calcQ1(self.epsilon)
+        #     self.Q2 = core.calcQ2(self.epsilon)
+        #     self.cR = core.calc_cR(self.Q2, self.sigma)
+        #     if self.verbose:
+        #         log.info("Q1 = {}".format(self.Q1))
+        #         log.info("Q2 = {}".format(self.Q2))
+        #         log.info("cR = {}".format(self.cR))
+        # else:
+        #     self.delta, self.sigma, self.epsilon, self.Q1, self.Q2, self.cR = [None]*6
+
+    def update_variogram_model(self, variogram_model, variogram_parameters=None,
+                               variogram_function=None, nlags=6, weight=False,
+                               anisotropy_scaling=1., anisotropy_angle=0.,
+                               enable_statistics=True):
+        """Allows user to update variogram type and/or
+        variogram model parameters.
+
+        Parameters
+        __________
+        variogram_model (string): May be any of the variogram models listed
+            above. May also be 'custom', in which case variogram_parameters
+            and variogram_function must be specified.
+        variogram_parameters (list or dict, optional): List or dict of
+            variogram model parameters, as explained above. If not provided,
+            a best fit model will be calculated as described above.
+        variogram_function (callable, optional): A callable function that must
+            be provided if variogram_model is specified as 'custom'.
+            See above for more information.
+        nlags (int, optional): Number of averaging bins for the semivariogram.
+            Default is 6.
+        weight (boolean, optional): Flag that specifies if semivariance at
+            smaller lags should be weighted more heavily when automatically
+            calculating the variogram model. See above for more information.
+            True indicates that weights will be applied. Default is False.
+        anisotropy_scaling (float, optional): Scalar stretching value to
+            take into account anisotropy. Default is 1 (effectively no
+            stretching). Scaling is applied in the y-direction.
+        anisotropy_angle (float, optional): CCW angle (in degrees) by
+            which to rotate coordinate system in order to take into
+            account anisotropy. Default is 0 (no rotation).
+        """
+
+        if anisotropy_scaling != self.anisotropy_scaling or \
+           anisotropy_angle != self.anisotropy_angle:
+            if self.coordinates_type == 'euclidean':
+                if self.verbose:
+                    log.info("Adjusting data for anisotropy...")
+                self.anisotropy_scaling = anisotropy_scaling
+                self.anisotropy_angle = anisotropy_angle
+                self.X_ADJUSTED, self.Y_ADJUSTED = \
+                    _adjust_for_anisotropy(np.vstack((self.X_ORIG, self.Y_ORIG)).T,
+                                           [self.XCENTER, self.YCENTER],
+                                           [self.anisotropy_scaling],
+                                           [self.anisotropy_angle]).T
+            elif self.coordinates_type == 'geographic':
+                if anisotropy_scaling != 1.0:
+                    log.warn("Anisotropy is not compatible with geographic "
+                             "coordinates. Ignoring user set anisotropy.")
+                self.anisotropy_scaling = 1.0
+                self.anisotropy_angle = 0.0
+                self.X_ADJUSTED = self.X_ORIG
+                self.Y_ADJUSTED = self.Y_ORIG
+            elif self.coordinates_type == 'network':
+                if anisotropy_scaling != 1.0:
+                    log.warn("Anisotropy is not compatible with network "
+                             "coordinates. Ignoring user set anisotropy.")
+                self.anisotropy_scaling = 1.0
+                self.anisotropy_angle = 0.0
+                self.X_ADJUSTED = self.X_ORIG
+                self.Y_ADJUSTED = self.Y_ORIG
+
         self.variogram_model = variogram_model
         if self.variogram_model not in self.variogram_dict.keys() and \
-                        self.variogram_model != 'custom':
+           self.variogram_model != 'custom':
             log.error("Specified variogram model '{}' is not supported.".format(
                 variogram_model))
             raise ValueError
@@ -268,9 +410,8 @@ class OrdinaryKriging:
                 self.variogram_function = variogram_function
         else:
             self.variogram_function = self.variogram_dict[self.variogram_model]
-
         if self.verbose:
-            log.info("Initializing variogram model...")
+            log.info("Updating variogram mode...")
 
         vp_temp = _make_variogram_parameter_list(self.variogram_model,
                                                  variogram_parameters)
@@ -281,7 +422,6 @@ class OrdinaryKriging:
                                         self.variogram_function, nlags,
                                         weight, self.coordinates_type,
                                         self.network)
-
         if self.verbose:
             log.info("Coordinates type: '{}'".format(self.coordinates_type))
             if self.variogram_model == 'linear':
@@ -333,120 +473,6 @@ class OrdinaryKriging:
                 log.info("cR = {}".format(self.cR))
         else:
             self.delta, self.sigma, self.epsilon, self.Q1, self.Q2, self.cR = [None]*6
-
-    def update_variogram_model(self, variogram_model, variogram_parameters=None,
-                               variogram_function=None, nlags=6, weight=False,
-                               anisotropy_scaling=1., anisotropy_angle=0.):
-        """Allows user to update variogram type and/or
-        variogram model parameters.
-
-        Parameters
-        __________
-        variogram_model (string): May be any of the variogram models listed
-            above. May also be 'custom', in which case variogram_parameters
-            and variogram_function must be specified.
-        variogram_parameters (list or dict, optional): List or dict of
-            variogram model parameters, as explained above. If not provided,
-            a best fit model will be calculated as described above.
-        variogram_function (callable, optional): A callable function that must
-            be provided if variogram_model is specified as 'custom'.
-            See above for more information.
-        nlags (int, optional): Number of averaging bins for the semivariogram.
-            Default is 6.
-        weight (boolean, optional): Flag that specifies if semivariance at
-            smaller lags should be weighted more heavily when automatically
-            calculating the variogram model. See above for more information.
-            True indicates that weights will be applied. Default is False.
-        anisotropy_scaling (float, optional): Scalar stretching value to
-            take into account anisotropy. Default is 1 (effectively no
-            stretching). Scaling is applied in the y-direction.
-        anisotropy_angle (float, optional): CCW angle (in degrees) by
-            which to rotate coordinate system in order to take into
-            account anisotropy. Default is 0 (no rotation).
-        """
-
-        if anisotropy_scaling != self.anisotropy_scaling or \
-           anisotropy_angle != self.anisotropy_angle:
-            if self.coordinates_type == 'euclidean':
-                if self.verbose:
-                    print("Adjusting data for anisotropy...")
-                self.anisotropy_scaling = anisotropy_scaling
-                self.anisotropy_angle = anisotropy_angle
-                self.X_ADJUSTED, self.Y_ADJUSTED = \
-                    _adjust_for_anisotropy(np.vstack((self.X_ORIG, self.Y_ORIG)).T,
-                                           [self.XCENTER, self.YCENTER],
-                                           [self.anisotropy_scaling],
-                                           [self.anisotropy_angle]).T
-            elif self.coordinates_type == 'geographic':
-                if anisotropy_scaling != 1.0:
-                    warnings.warn("Anisotropy is not compatible with geographic"
-                                  " coordinates. Ignoring user set anisotropy.",
-                                  UserWarning)
-                self.anisotropy_scaling = 1.0
-                self.anisotropy_angle = 0.0
-                self.X_ADJUSTED = self.X_ORIG
-                self.Y_ADJUSTED = self.Y_ORIG
-
-        self.variogram_model = variogram_model
-        if self.variogram_model not in self.variogram_dict.keys() and self.variogram_model != 'custom':
-            raise ValueError("Specified variogram model '%s' is not supported." % variogram_model)
-        elif self.variogram_model == 'custom':
-            if variogram_function is None or not callable(variogram_function):
-                raise ValueError("Must specify callable function for custom variogram model.")
-            else:
-                self.variogram_function = variogram_function
-        else:
-            self.variogram_function = self.variogram_dict[self.variogram_model]
-        if self.verbose:
-            print("Updating variogram mode...")
-
-        # See note above about the 'use_psill' kwarg...
-        vp_temp = _make_variogram_parameter_list(self.variogram_model,
-                                                 variogram_parameters)
-        self.lags, self.semivariance, self.variogram_model_parameters = \
-            _initialize_variogram_model(np.vstack((self.X_ADJUSTED,
-                                                   self.Y_ADJUSTED)).T,
-                                        self.Z, self.variogram_model, vp_temp,
-                                        self.variogram_function, nlags,
-                                        weight, self.coordinates_type)
-
-        if self.verbose:
-            print("Coordinates type: '%s'" % self.coordinates_type, '\n')
-            if self.variogram_model == 'linear':
-                print("Using '%s' Variogram Model" % 'linear')
-                print("Slope:", self.variogram_model_parameters[0])
-                print("Nugget:", self.variogram_model_parameters[1], '\n')
-            elif self.variogram_model == 'power':
-                print("Using '%s' Variogram Model" % 'power')
-                print("Scale:", self.variogram_model_parameters[0])
-                print("Exponent:", self.variogram_model_parameters[1])
-                print("Nugget:", self.variogram_model_parameters[2], '\n')
-            elif self.variogram_model == 'custom':
-                print("Using Custom Variogram Model")
-            else:
-                print("Using '%s' Variogram Model" % self.variogram_model)
-                print("Partial Sill:", self.variogram_model_parameters[0])
-                print("Full Sill:", self.variogram_model_parameters[0] +
-                      self.variogram_model_parameters[2])
-                print("Range:", self.variogram_model_parameters[1])
-                print("Nugget:", self.variogram_model_parameters[2], '\n')
-        if self.enable_plotting:
-            self.display_variogram_model()
-
-        if self.verbose:
-            print("Calculating statistics on variogram model fit...")
-        self.delta, self.sigma, self.epsilon = \
-            _find_statistics(np.vstack((self.X_ADJUSTED, self.Y_ADJUSTED)).T,
-                             self.Z, self.variogram_function,
-                             self.variogram_model_parameters,
-                             self.coordinates_type)
-        self.Q1 = core.calcQ1(self.epsilon)
-        self.Q2 = core.calcQ2(self.epsilon)
-        self.cR = core.calc_cR(self.Q2, self.sigma)
-        if self.verbose:
-            print("Q1 =", self.Q1)
-            print("Q2 =", self.Q2)
-            print("cR =", self.cR, '\n')
 
     def display_variogram_model(self):
         """Displays variogram model with the actual binned data."""
@@ -691,7 +717,7 @@ class OrdinaryKriging:
         """
 
         if self.verbose:
-            print("Executing Ordinary Kriging...\n")
+            log.info("Executing Ordinary Kriging...")
 
         if style != 'grid' and style != 'masked' and style != 'points':
             raise ValueError("style argument must be 'grid', "
@@ -758,6 +784,11 @@ class OrdinaryKriging:
             xy_points = np.concatenate((np.cos(lon_p) * np.cos(lat_p),
                                         np.sin(lon_p) * np.cos(lat_p),
                                         np.sin(lat_p)), axis=1)
+        elif self.coordinates_type == 'network':
+            xy_data = np.concatenate((self.X_ADJUSTED[:, np.newaxis],
+                                      self.Y_ADJUSTED[:, np.newaxis]), axis=1)
+            xy_points = np.concatenate((xpts[:, np.newaxis],
+                                        ypts[:, np.newaxis]), axis=1)
 
         if style != 'masked':
             mask = np.zeros(npt, dtype='bool')
@@ -778,13 +809,19 @@ class OrdinaryKriging:
             c_pars = {key: getattr(self, key) for key in ['Z', 'eps', 'variogram_model_parameters', 'variogram_function']}
 
         if n_closest_points is not None:
+            # TODO: add this option also for networks
+            if self.coordinates_type == 'network':
+                log.error("'n closest points' are not yet supported for"+
+                          "networks!")
+                raise ValueError
+
             from scipy.spatial import cKDTree
             tree = cKDTree(xy_data)
             bd, bd_idx = tree.query(xy_points, k=n_closest_points, eps=0.0)
             if self.coordinates_type == 'geographic':
                 # Convert euclidean distances to great circle distances:
                 bd = core.euclid3_to_great_circle(bd)
-            
+
             if backend == 'loop':
                 zvalues, sigmasq = \
                     self._exec_loop_moving_window(a, bd, mask, bd_idx)
@@ -797,7 +834,11 @@ class OrdinaryKriging:
                 raise ValueError('Specified backend {} for a moving window '
                                  'is not supported.'.format(backend))
         else:
-            bd = cdist(xy_points,  xy_data, 'euclidean')
+            if self.coordinates_type == 'network':
+                bd = self.network.ndist(xy_points,  a=xy_data, mode='cdist')
+#                bd = bd.astype(np.float)
+            else:
+                bd = cdist(xy_points,  xy_data, 'euclidean')
             if self.coordinates_type == 'geographic':
                 # Convert euclidean distances to great circle distances:
                 bd = core.euclid3_to_great_circle(bd)
