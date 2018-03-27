@@ -3,7 +3,7 @@
 # =============================================================================
 # File      : network_tools.py 
 # Creation  : 26 Mar 2018
-# Time-stamp: <Mon 2018-03-26 14:08 juergen>
+# Time-stamp: <Die 2018-03-27 08:50 juergen>
 #
 # Copyright (c) 2018 Jürgen Hackl <hackl@ibi.baug.ethz.ch>
 #               http://www.ibi.ethz.ch
@@ -51,7 +51,6 @@ class Network:
 
     def _check_network(self):
         log.info('Check network ...')
-        print(nx.info(self.network))
 
         x_attributes = \
         nx.get_node_attributes(self.network,self.x_attribute_name)
@@ -162,7 +161,6 @@ class Network:
                                                             target=u,
                                                             weight=self.weight))
                     dist.append(temp_dist)
-                        
         return np.array(dist).astype(np.float)
 
 

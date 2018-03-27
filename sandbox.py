@@ -3,7 +3,7 @@
 # =============================================================================
 # File      : sandbox.py 
 # Creation  : 22 Mar 2018
-# Time-stamp: <Mon 2018-03-26 16:44 juergen>
+# Time-stamp: <Die 2018-03-27 09:34 juergen>
 #
 # Copyright (c) 2018 Jürgen Hackl <hackl@ibi.baug.ethz.ch>
 #               http://www.ibi.ethz.ch
@@ -115,6 +115,7 @@ def test_1d():
     y = data[:, 2]
     
     uk = OrdinaryKriging(X, Y, y, variogram_model='linear',)
+    uk.plot_epsilon_residuals()
 #    uk.update_variogram_model('gaussian')
     y_pred, y_std = uk.execute('points', X_pred, np.zeros(101),backend='C')
 
